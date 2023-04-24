@@ -26,15 +26,8 @@
 </template>
 
 <script lang="ts" setup>
-import {onMounted, ref, watch} from 'vue'
-
-const clamp = (min: number, value: number, max: number) => Math.min(Math.max(value, min), max);
-
-const canvasElement = ref<HTMLDivElement>()
-const pointerElement = ref<HTMLDivElement>()
-
-const isFocused = ref(false)
-const isDragged = ref(false)
+import {ref, watchEffect} from 'vue'
+import clamp from '../../utils/clamp'
 
 const props = defineProps({
   value: {
@@ -63,37 +56,41 @@ const props = defineProps({
   },
 })
 
-const draggedState = { mouseStart: 0, position: props.value }
+const canvasElement = ref<HTMLDivElement>()
+const pointerElement = ref<HTMLDivElement>()
+
+const isFocused = ref(false)
+const isDragged = ref(false)
+
+let mouseStart = 0
 
 function onMouseDownCanvas(event: MouseEvent) {
   const offset = event.offsetX;
   const width = canvasElement.value!.clientWidth;
   emit('change', offset / width)
 
-  draggedState.mouseStart = event.clientX - offset
+  mouseStart = event.clientX - offset
   isDragged.value = true
   setTimeout(() => {
     pointerElement.value!.focus()
-  });
+  })
 }
 
 function onMouseDown(event: MouseEvent) {
-  draggedState.mouseStart = event.clientX - draggedState.position
+  mouseStart = event.clientX - (props.value * (canvasElement.value?.offsetWidth || 0))
   isDragged.value = true
 }
 
-const onMouseMove = (event: MouseEvent) => {
-  const width = canvasElement.value!.clientWidth
-  const offset = event.clientX - draggedState.mouseStart
-  const croppedOffset = clamp(0, offset, width)
-  emit('change', croppedOffset / width)
-}
+watchEffect(() => {
+    if (isFocused.value) {
+      window.addEventListener('keydown', onKeyDown)
+    } else {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }
+)
 
-const onMouseUp = () => {
-  isDragged.value = false
-}
-
-const onKeyDown = (e: KeyboardEvent) => {
+function onKeyDown(e: KeyboardEvent) {
   const isIncreaseAction = e.code === 'ArrowRight';
   const isDecreaseAction = e.code === 'ArrowLeft';
 
@@ -115,28 +112,8 @@ const onKeyDown = (e: KeyboardEvent) => {
   emit('change', clamp(0, props.value + diff, 1))
 }
 
-watch(
-  () => props.value,
-  value => {
-    draggedState.position = value * canvasElement.value!.offsetWidth;
-  }
-);
-
-watch(
-  () => isFocused.value,
-  isDragging => {
-    if (isDragging) {
-      window.addEventListener('keydown', onKeyDown)
-    } else {
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }
-)
-
-watch(
-  () => isDragged.value,
-  isDragging => {
-    if (isDragging) {
+watchEffect(() => {
+    if (isDragged.value) {
       document.body.classList.add('grabbing');
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
@@ -148,17 +125,22 @@ watch(
   }
 )
 
-onMounted(() => {
-  draggedState.position = props.value * canvasElement.value!.offsetWidth
-})
+function onMouseMove(event: MouseEvent) {
+  const width = canvasElement.value!.clientWidth
+  const offset = event.clientX - mouseStart
+  const croppedOffset = clamp(0, offset, width)
+  emit('change', croppedOffset / width)
+}
+
+function onMouseUp() {
+  isDragged.value = false
+}
 
 const emit = defineEmits(['change'])
 </script>
 
 <style lang="scss" scoped>
 .color-picker-slider {
-  flex: 1 0 auto;
-
   &__wrapper {
     height: 20px;
     padding: 5px 0;
@@ -188,6 +170,7 @@ const emit = defineEmits(['change'])
     cursor: grab;
     border-radius: 4px;
     user-select: none;
+    transform: translateX(-50%);
 
     &:focus {
       outline: 2px solid rgba(0, 0, 0, 0.7);
