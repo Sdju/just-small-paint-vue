@@ -8,6 +8,9 @@
       <button class="simple-canvas__button" @click="onButtonClear">
         Clear
       </button>
+      <button class="simple-canvas__button" @click="onButtonSave">
+        Save
+      </button>
     </div>
     <div class="simple-canvas__canvas-wrapper">
       <canvas
@@ -181,6 +184,13 @@ function onResizerMouseUp() {
 
 function onResizerMouseLeave() {
   isResizing.value = false
+}
+
+function onButtonSave() {
+  const link = document.createElement('a')
+  link.download = 'download.png'
+  link.href = canvas.value!.toDataURL('image/png')
+  link.click()
 }
 
 </script>
